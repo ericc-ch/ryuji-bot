@@ -1,16 +1,19 @@
-import { joinVoiceChannel } from "@discordjs/voice"
+import { joinVoiceChannel, EndBehaviorType } from "@discordjs/voice"
+import { consola } from "consola"
 import {
   CommandInteraction,
   SlashCommandBuilder,
   GuildMember,
 } from "discord.js"
+import { createWriteStream, mkdirSync } from "node:fs"
+import { join } from "node:path"
 
 import type { Command } from "../types/commands"
 
 const command: Command = {
   data: new SlashCommandBuilder()
     .setName("join")
-    .setDescription("Joins your voice channel"),
+    .setDescription("Joins your voice channel and starts recording"),
 
   execute: async (interaction: CommandInteraction) => {
     // Check if the command was used in a guild
@@ -36,14 +39,49 @@ const command: Command = {
     }
 
     try {
-      joinVoiceChannel({
+      const connection = joinVoiceChannel({
         channelId: voiceChannel.id,
         guildId: voiceChannel.guild.id,
         adapterCreator: voiceChannel.guild.voiceAdapterCreator,
         selfDeaf: false,
       })
 
-      await interaction.reply(`Joined ${voiceChannel.name}!`)
+      const receiver = connection.receiver
+
+      mkdirSync(join(process.cwd(), "recordings"), { recursive: true })
+
+      // Start listening to speaking users
+      receiver.speaking.on("start", (userId) => {
+        const user = interaction.client.users.cache.get(userId)
+        consola.info(`${user?.tag ?? userId} started speaking`)
+
+        // Create filename with timestamp and username
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
+        const filename = `${user?.username ?? userId}-${timestamp}.opus`
+        const outputPath = join(process.cwd(), "recordings", filename)
+
+        // Create audio stream for this user
+        const audioStream = receiver.subscribe(userId, {
+          end: {
+            behavior: EndBehaviorType.AfterSilence,
+            duration: 500,
+          },
+        })
+
+        // Pipe to file
+        const outputStream = createWriteStream(outputPath)
+        audioStream.pipe(outputStream)
+
+        audioStream.on("end", () => {
+          consola.info(`Finished recording ${user?.tag ?? userId}`)
+          outputStream.end()
+        })
+      })
+
+      await interaction.reply({
+        content: `Joined ${voiceChannel.name} and started listening!`,
+        ephemeral: true,
+      })
     } catch (error) {
       console.error(error)
       await interaction.reply({
