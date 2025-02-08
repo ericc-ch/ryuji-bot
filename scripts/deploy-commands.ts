@@ -6,6 +6,10 @@ import { ENV } from "../src/lib/env"
 
 const commands = await getAllCommands()
 
+for (const command of commands) {
+  consola.info(`Found command: ${command.data.name}`)
+}
+
 const rest = new REST().setToken(ENV.DISCORD_TOKEN)
 
 try {

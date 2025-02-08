@@ -13,7 +13,6 @@
   "type": "module",
   "scripts": {
     "deploy:commands": "bun run scripts/deploy-commands.ts",
-    "predev": "bun run deploy:commands",
     "dev": "bun run --hot src/main.ts",
     "lint": "eslint .",
     "prestart": "bun run deploy:commands",
@@ -26,6 +25,7 @@
     "*": "eslint --fix"
   },
   "dependencies": {
+    "@discordjs/opus": "^0.10.0",
     "@discordjs/voice": "^0.18.0",
     "@echristian/env": "^0.0.6",
     "consola": "^3.4.0",
