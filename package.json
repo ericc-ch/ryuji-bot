@@ -1,10 +1,33 @@
 {
   "name": "@echristian/pkg-placeholder",
   "version": "0.0.0",
-  "author": "Erick Christian <erickchristian48@gmail.com>",
+  "description": "_description_",
+  "keywords": [],
+  "homepage": "https://github.com/ericc-ch/pkg-placeholder",
+  "bugs": "https://github.com/ericc-ch/pkg-placeholder/issues",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ericc-ch/pkg-placeholder.git"
+  },
+  "author": "Erick Christian <erickchristian48@gmail.com>",
+  "type": "module",
+  "scripts": {
+    "lint": "eslint .",
+    "start": "bun run src/main.ts"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "bunx --bun lint-staged"
+  },
+  "lint-staged": {
+    "*": "eslint --fix"
+  },
+  "dependencies": {
+    "@discordjs/voice": "^0.18.0",
+    "@echristian/env": "^0.0.6",
+    "consola": "^3.4.0",
+    "discord.js": "^14.17.3",
+    "libsodium-wrappers": "^0.7.15",
+    "std-env": "^3.8.0"
   },
   "devDependencies": {
     "@echristian/eslint-config": "^0.0.18",
@@ -13,20 +36,5 @@
     "lint-staged": "^15.4.3",
     "simple-git-hooks": "^2.11.1",
     "typescript": "^5.7.3"
-  },
-  "bugs": "https://github.com/ericc-ch/pkg-placeholder/issues",
-  "description": "_description_",
-  "homepage": "https://github.com/ericc-ch/pkg-placeholder",
-  "keywords": [],
-  "lint-staged": {
-    "*": "eslint --fix"
-  },
-  "scripts": {
-    "lint": "eslint .",
-    "start": "bun run src/main.ts"
-  },
-  "simple-git-hooks": {
-    "pre-commit": "bunx --bun lint-staged"
-  },
-  "type": "module"
+  }
 }
