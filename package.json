@@ -13,8 +13,10 @@
   "type": "module",
   "scripts": {
     "deploy:commands": "bun run scripts/deploy-commands.ts",
+    "predev": "bun run deploy:commands",
     "dev": "bun run --hot src/main.ts",
     "lint": "eslint .",
+    "prestart": "bun run deploy:commands",
     "start": "bun run src/main.ts"
   },
   "simple-git-hooks": {
