@@ -6,7 +6,7 @@ import { ENV } from "./lib/env"
 
 // Initialize client with basic intents
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
 })
 
 // Handle ready event

@@ -40,6 +40,7 @@ const command: Command = {
         channelId: voiceChannel.id,
         guildId: voiceChannel.guild.id,
         adapterCreator: voiceChannel.guild.voiceAdapterCreator,
+        selfDeaf: false,
       })
 
       await interaction.reply(`Joined ${voiceChannel.name}!`)
