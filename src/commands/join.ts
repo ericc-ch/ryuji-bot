@@ -11,6 +11,8 @@ import type { Command } from "../types/commands"
 
 import { processUserAudio } from "../lib/audio-processor"
 import { ChatManager } from "../lib/chat-manager"
+import { ENV } from "../lib/env"
+import { GoogleFileManager } from "../lib/google-file-manager"
 import { TempManager } from "../lib/temp-manager"
 
 const command: Command = {
@@ -65,6 +67,9 @@ const command: Command = {
       const receiver = connection.receiver
 
       const tempManager = new TempManager("voice-")
+      const googleFileManager = GoogleFileManager.getInstance(
+        ENV.GEMINI_API_KEY,
+      )
 
       const SAMPLE_RATE = 48000
       const CHANNELS = 2
@@ -85,8 +90,20 @@ const command: Command = {
           })
 
           consola.info(`Audio saved to temporary file: ${outputPath}`)
-          // Here you can do whatever you need with the audio file
-          // It will be automatically cleaned up when the process exits
+
+          try {
+            const uploadedFile = await googleFileManager.upload(outputPath, {
+              mimeType: "audio/ogg",
+            })
+            consola.info(`Audio uploaded to Google AI: ${uploadedFile.name}`)
+
+            // Wait for processing to complete
+            const processedFile =
+              await googleFileManager.waitForFileProcessing(uploadedFile)
+            consola.info(`Audio processing complete: ${processedFile.name}`)
+          } catch (error) {
+            consola.error("Failed to upload audio to Google AI:", error)
+          }
         } catch (error) {
           consola.error("Failed to process audio:", error)
         }

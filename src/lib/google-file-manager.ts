@@ -19,14 +19,22 @@ interface UploadOptions {
 }
 
 export class GoogleFileManager {
+  private static instance: GoogleFileManager | null = null
   private fileManager: GoogleAIFileManager
   private tempManager: TempManager
   private log = consola.withTag("GoogleFileManager")
 
-  constructor(apiKey: string) {
+  private constructor(apiKey: string) {
     if (!apiKey) throw new GoogleFileManagerError("API key is required")
     this.fileManager = new GoogleAIFileManager(apiKey)
     this.tempManager = new TempManager("google-ai-")
+  }
+
+  static getInstance(apiKey: string): GoogleFileManager {
+    if (!GoogleFileManager.instance) {
+      GoogleFileManager.instance = new GoogleFileManager(apiKey)
+    }
+    return GoogleFileManager.instance
   }
 
   private async withRetry<T>(
