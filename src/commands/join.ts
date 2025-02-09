@@ -1,4 +1,9 @@
-import { joinVoiceChannel } from "@discordjs/voice"
+import {
+  joinVoiceChannel,
+  createAudioResource,
+  StreamType,
+} from "@discordjs/voice"
+import { synthesizeStream } from "@echristian/edge-tts"
 import { consola } from "consola"
 import {
   CommandInteraction,
@@ -6,6 +11,7 @@ import {
   GuildMember,
   MessageFlags,
 } from "discord.js"
+import { Readable } from "node:stream"
 
 import type { Command } from "../types/commands"
 
@@ -121,7 +127,36 @@ const command: Command = {
                 },
               ])
 
-              consola.info("AI Response:", response.response.text())
+              const responseText = response.response.text()
+              consola.info("AI Response:", responseText)
+
+              // Create a readable stream from the Edge TTS chunks
+              const audioChunks = synthesizeStream({ text: responseText })
+              const audioStream = new Readable({
+                read() {
+                  audioChunks.next().then(
+                    (result) => {
+                      if (result.done) {
+                        this.push(null)
+                      } else {
+                        this.push(result.value)
+                      }
+                    },
+                    (error: unknown) => {
+                      consola.error("Error reading audio chunk:", error)
+                      this.destroy(error as Error)
+                    },
+                  )
+                },
+              })
+
+              // Create an audio resource from the stream
+              const audioResource = createAudioResource(audioStream, {
+                inputType: StreamType.OggOpus,
+              })
+
+              // Play the audio in the voice connection
+              connection.subscribe(audioResource)
             } catch (error) {
               consola.error("Failed to send audio to chat session:", error)
             }

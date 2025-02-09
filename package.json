@@ -27,6 +27,7 @@
   "dependencies": {
     "@discordjs/opus": "^0.10.0",
     "@discordjs/voice": "^0.18.0",
+    "@echristian/edge-tts": "^0.0.14",
     "@echristian/env": "^0.0.6",
     "@google/generative-ai": "^0.21.0",
     "@libsql/client": "^0.14.0",
