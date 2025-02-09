@@ -2,6 +2,8 @@ import {
   joinVoiceChannel,
   createAudioResource,
   StreamType,
+  createAudioPlayer,
+  AudioPlayerStatus,
 } from "@discordjs/voice"
 import { synthesizeStream } from "@echristian/edge-tts"
 import { consola } from "consola"
@@ -65,6 +67,25 @@ const command: Command = {
         adapterCreator: voiceChannel.guild.voiceAdapterCreator,
         selfDeaf: false,
       })
+
+      // Create the audio player
+      const player = createAudioPlayer()
+
+      // Handle player state changes
+      player.on(AudioPlayerStatus.Playing, () => {
+        consola.info("Started playing audio response")
+      })
+
+      player.on(AudioPlayerStatus.Idle, () => {
+        consola.info("Finished playing audio response")
+      })
+
+      player.on("error", (error) => {
+        consola.error("Error:", error.message)
+      })
+
+      // Subscribe the connection to the player
+      connection.subscribe(player)
 
       // Create a new chat session for this guild. We already checked for guild above.
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
@@ -130,33 +151,85 @@ const command: Command = {
               const responseText = response.response.text()
               consola.info("AI Response:", responseText)
 
-              // Create a readable stream from the Edge TTS chunks
-              const audioChunks = synthesizeStream({ text: responseText })
-              const audioStream = new Readable({
-                read() {
-                  audioChunks.next().then(
-                    (result) => {
-                      if (result.done) {
-                        this.push(null)
-                      } else {
-                        this.push(result.value)
-                      }
-                    },
-                    (error: unknown) => {
-                      consola.error("Error reading audio chunk:", error)
-                      this.destroy(error as Error)
-                    },
-                  )
-                },
-              })
+              // Split the response into Ryuji and Ann parts
+              const ryujiMatch = /Ryuji: (.*)\n/.exec(responseText)?.[1]
+              const annMatch = /Ann: (.*)/.exec(responseText)?.[1]
 
-              // Create an audio resource from the stream
-              const audioResource = createAudioResource(audioStream, {
-                inputType: StreamType.OggOpus,
-              })
+              if (!ryujiMatch || !annMatch) {
+                consola.error("Failed to parse character responses")
+                return
+              }
 
-              // Play the audio in the voice connection
-              connection.subscribe(audioResource)
+              // Create sequential TTS streams
+              async function createCharacterAudioResource(
+                text: string,
+                language: string,
+                voice: string,
+              ) {
+                const audioChunks = synthesizeStream({
+                  text,
+                  language,
+                  voice,
+                })
+
+                return new Promise<Readable>((resolve) => {
+                  const audioStream = new Readable({
+                    read() {
+                      audioChunks.next().then(
+                        (result) => {
+                          if (result.done) {
+                            this.push(null)
+                          } else {
+                            this.push(result.value)
+                          }
+                        },
+                        (error: unknown) => {
+                          consola.error("Error reading audio chunk:", error)
+                          this.destroy(error as Error)
+                        },
+                      )
+                    },
+                  })
+                  resolve(audioStream)
+                })
+              }
+
+              // Play characters sequentially
+              try {
+                // Play Ryuji first (Japanese)
+                const ryujiStream = await createCharacterAudioResource(
+                  ryujiMatch,
+                  "ja-JP",
+                  "ja-JP-KeitaNeural",
+                )
+                const ryujiResource = createAudioResource(ryujiStream, {
+                  inputType: StreamType.OggOpus,
+                })
+
+                // Set up promise to wait for Ryuji's audio to finish
+                const waitForRyuji = new Promise<void>((resolve) => {
+                  player.once(AudioPlayerStatus.Idle, () => {
+                    resolve()
+                  })
+                })
+
+                player.play(ryujiResource)
+                await waitForRyuji
+
+                // Then play Ann (English)
+                const annStream = await createCharacterAudioResource(
+                  annMatch,
+                  "en-US",
+                  "en-US-JennyNeural",
+                )
+                const annResource = createAudioResource(annStream, {
+                  inputType: StreamType.OggOpus,
+                })
+
+                player.play(annResource)
+              } catch (error) {
+                consola.error("Failed to play character audio:", error)
+              }
             } catch (error) {
               consola.error("Failed to send audio to chat session:", error)
             }
