@@ -4,6 +4,8 @@ import { Client, Events, GatewayIntentBits } from "discord.js"
 import { getAllCommands } from "./lib/commands"
 import { ENV } from "./lib/env"
 
+consola.level = 4
+
 // Initialize client with basic intents
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
