@@ -13,6 +13,8 @@ import { join } from "node:path"
 
 import type { Command } from "../types/commands"
 
+import { ChatManager } from "../lib/chat-manager"
+
 const SAMPLE_RATE = 48000
 const CHANNELS = 2
 const PCM_FORMAT = "s16le"
@@ -42,6 +44,18 @@ const command: Command = {
       return
     }
 
+    // Get ChatManager instance and check if session already exists
+    const chatManager = ChatManager.getInstance()
+    // We already checked for guild above
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    if (chatManager.hasSession(interaction.guildId!)) {
+      await interaction.reply({
+        content: "I'm already in a voice channel in this server!",
+        ephemeral: true,
+      })
+      return
+    }
+
     try {
       const connection = joinVoiceChannel({
         channelId: voiceChannel.id,
@@ -49,6 +63,10 @@ const command: Command = {
         adapterCreator: voiceChannel.guild.voiceAdapterCreator,
         selfDeaf: false,
       })
+
+      // Create a new chat session for this guild. We already checked for guild above.
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      chatManager.createSession(interaction.guildId!)
 
       const receiver = connection.receiver
 
@@ -141,6 +159,9 @@ const command: Command = {
       })
     } catch (error) {
       console.error(error)
+      // If something fails, make sure to clean up the chat session
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      chatManager.removeSession(interaction.guildId!)
       await interaction.reply({
         content: "Failed to join voice channel!",
         flags: [MessageFlags.Ephemeral],
