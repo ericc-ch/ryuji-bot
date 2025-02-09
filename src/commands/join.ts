@@ -101,6 +101,30 @@ const command: Command = {
             const processedFile =
               await googleFileManager.waitForFileProcessing(uploadedFile)
             consola.info(`Audio processing complete: ${processedFile.name}`)
+
+            // Get the chat session for this guild
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            const chat = chatManager.getSession(interaction.guildId!)
+
+            if (!chat) {
+              consola.error("No chat session found for guild")
+              return
+            }
+
+            try {
+              const response = await chat.sendMessage([
+                {
+                  fileData: {
+                    fileUri: processedFile.uri,
+                    mimeType: "audio/ogg",
+                  },
+                },
+              ])
+
+              consola.info("AI Response:", response.response.text())
+            } catch (error) {
+              consola.error("Failed to send audio to chat session:", error)
+            }
           } catch (error) {
             consola.error("Failed to upload audio to Google AI:", error)
           }
