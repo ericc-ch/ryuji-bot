@@ -1,5 +1,4 @@
-import { OpusEncoder } from "@discordjs/opus"
-import { joinVoiceChannel, EndBehaviorType } from "@discordjs/voice"
+import { joinVoiceChannel } from "@discordjs/voice"
 import { consola } from "consola"
 import {
   CommandInteraction,
@@ -7,17 +6,12 @@ import {
   GuildMember,
   MessageFlags,
 } from "discord.js"
-import { spawn } from "node:child_process"
-import { mkdirSync } from "node:fs"
-import { join } from "node:path"
 
 import type { Command } from "../types/commands"
 
+import { processUserAudio } from "../lib/audio-processor"
 import { ChatManager } from "../lib/chat-manager"
-
-const SAMPLE_RATE = 48000
-const CHANNELS = 2
-const PCM_FORMAT = "s16le"
+import { TempManager } from "../lib/temp-manager"
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -70,87 +64,32 @@ const command: Command = {
 
       const receiver = connection.receiver
 
-      mkdirSync(join(process.cwd(), "recordings"), { recursive: true })
+      const tempManager = new TempManager("voice-")
 
-      receiver.speaking.on("start", (userId) => {
+      const SAMPLE_RATE = 48000
+      const CHANNELS = 2
+      const PCM_FORMAT = "s16le"
+
+      receiver.speaking.on("start", async (userId) => {
         const user = interaction.client.users.cache.get(userId)
         consola.info(`${user?.tag ?? userId} started speaking`)
 
-        // Create discord voice receiver stream
-        const opusStream = receiver.subscribe(userId, {
-          end: {
-            behavior: EndBehaviorType.AfterInactivity,
-            duration: 2000,
-          },
-        })
-
-        // Buffer to store all chunks
-        const chunks: Array<Buffer> = []
-        const decoder = new OpusEncoder(SAMPLE_RATE, CHANNELS)
-
-        opusStream.on("data", (chunk: Buffer) => {
-          try {
-            // Decode opus packet to PCM
-            const pcmChunk = decoder.decode(chunk)
-            chunks.push(pcmChunk)
-          } catch (error) {
-            consola.error("Failed to decode opus packet:", error)
-          }
-        })
-
-        opusStream.on("end", () => {
-          // Combine all chunks into a single buffer
-          const finalBuffer = Buffer.concat(chunks)
-
-          // Create output file path
-          const outputFile = join(
-            process.cwd(),
-            "recordings",
-            `${user?.tag ?? userId}.ogg`,
-          )
-
-          // Spawn ffmpeg process
-          const ffmpeg = spawn("ffmpeg", [
-            "-f",
-            PCM_FORMAT, // Input format: raw PCM
-            "-ar",
-            SAMPLE_RATE.toString(), // Sample rate: 48kHz
-            "-ac",
-            CHANNELS.toString(), // Audio channels: 2
-            "-i",
-            "-", // Input from stdin
-            "-c:a",
-            "libopus", // Encode to opus
-            outputFile, // Output file
-          ])
-
-          // Write the buffer to ffmpeg's stdin and close it
-          ffmpeg.stdin.write(finalBuffer)
-          ffmpeg.stdin.end()
-
-          ffmpeg.stderr.on("data", (data) => {
-            consola.debug(`ffmpeg: ${data}`)
+        try {
+          const outputPath = await processUserAudio(receiver, {
+            userId,
+            userTag: user?.tag,
+            tempManager,
+            sampleRate: SAMPLE_RATE,
+            channels: CHANNELS,
+            pcmFormat: PCM_FORMAT,
           })
 
-          ffmpeg.on("close", (code) => {
-            if (code === 0) {
-              consola.info(`Finished recording ${user?.tag ?? userId}`)
-            } else {
-              consola.error(`ffmpeg process exited with code ${code}`)
-            }
-          })
-
-          ffmpeg.on("error", (error) => {
-            consola.error(`Error recording ${user?.tag ?? userId}:`, error)
-          })
-        })
-
-        opusStream.on("error", (error) => {
-          consola.error(
-            `Error receiving audio from ${user?.tag ?? userId}:`,
-            error,
-          )
-        })
+          consola.info(`Audio saved to temporary file: ${outputPath}`)
+          // Here you can do whatever you need with the audio file
+          // It will be automatically cleaned up when the process exits
+        } catch (error) {
+          consola.error("Failed to process audio:", error)
+        }
       })
 
       await interaction.reply({
