@@ -5,6 +5,7 @@ import {
   CommandInteraction,
   SlashCommandBuilder,
   GuildMember,
+  MessageFlags,
 } from "discord.js"
 import { spawn } from "node:child_process"
 import { mkdirSync } from "node:fs"
@@ -95,9 +96,9 @@ const command: Command = {
             "-f",
             PCM_FORMAT, // Input format: raw PCM
             "-ar",
-            String(SAMPLE_RATE), // Sample rate: 48kHz
+            SAMPLE_RATE.toString(), // Sample rate: 48kHz
             "-ac",
-            String(CHANNELS), // Audio channels: 2
+            CHANNELS.toString(), // Audio channels: 2
             "-i",
             "-", // Input from stdin
             "-c:a",
@@ -142,7 +143,7 @@ const command: Command = {
       console.error(error)
       await interaction.reply({
         content: "Failed to join voice channel!",
-        ephemeral: true,
+        flags: [MessageFlags.Ephemeral],
       })
     }
   },

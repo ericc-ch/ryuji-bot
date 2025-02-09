@@ -32,7 +32,8 @@
     "discord.js": "^14.17.3",
     "libsodium-wrappers": "^0.7.15",
     "pathe": "^2.0.2",
-    "std-env": "^3.8.0"
+    "std-env": "^3.8.0",
+    "tinyexec": "^0.3.2"
   },
   "devDependencies": {
     "@echristian/eslint-config": "^0.0.18",
