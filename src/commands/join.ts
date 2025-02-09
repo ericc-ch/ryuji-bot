@@ -1,3 +1,4 @@
+import { OpusEncoder } from "@discordjs/opus"
 import { joinVoiceChannel, EndBehaviorType } from "@discordjs/voice"
 import { consola } from "consola"
 import {
@@ -5,10 +6,15 @@ import {
   SlashCommandBuilder,
   GuildMember,
 } from "discord.js"
-import { createWriteStream, mkdirSync } from "node:fs"
+import { spawn } from "node:child_process"
+import { mkdirSync } from "node:fs"
 import { join } from "node:path"
 
 import type { Command } from "../types/commands"
+
+const SAMPLE_RATE = 48000
+const CHANNELS = 2
+const PCM_FORMAT = "s16le"
 
 const command: Command = {
   data: new SlashCommandBuilder()
@@ -16,7 +22,6 @@ const command: Command = {
     .setDescription("Joins your voice channel and starts recording"),
 
   execute: async (interaction: CommandInteraction) => {
-    // Check if the command was used in a guild
     if (!interaction.guild) {
       await interaction.reply({
         content: "This command can only be used in a server!",
@@ -25,11 +30,9 @@ const command: Command = {
       return
     }
 
-    // Get member who used the command
     const member = interaction.member as GuildMember
-
-    // Check if user is in a voice channel
     const voiceChannel = member.voice.channel
+
     if (!voiceChannel) {
       await interaction.reply({
         content: "You need to be in a voice channel first!",
@@ -50,31 +53,84 @@ const command: Command = {
 
       mkdirSync(join(process.cwd(), "recordings"), { recursive: true })
 
-      // Start listening to speaking users
       receiver.speaking.on("start", (userId) => {
         const user = interaction.client.users.cache.get(userId)
         consola.info(`${user?.tag ?? userId} started speaking`)
 
-        // Create filename with timestamp and username
-        const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
-        const filename = `${user?.username ?? userId}-${timestamp}.opus`
-        const outputPath = join(process.cwd(), "recordings", filename)
-
-        // Create audio stream for this user
-        const audioStream = receiver.subscribe(userId, {
+        // Create discord voice receiver stream
+        const opusStream = receiver.subscribe(userId, {
           end: {
-            behavior: EndBehaviorType.AfterSilence,
-            duration: 500,
+            behavior: EndBehaviorType.AfterInactivity,
+            duration: 2000,
           },
         })
 
-        // Pipe to file
-        const outputStream = createWriteStream(outputPath)
-        audioStream.pipe(outputStream)
+        // Buffer to store all chunks
+        const chunks: Array<Buffer> = []
+        const decoder = new OpusEncoder(SAMPLE_RATE, CHANNELS)
 
-        audioStream.on("end", () => {
-          consola.info(`Finished recording ${user?.tag ?? userId}`)
-          outputStream.end()
+        opusStream.on("data", (chunk: Buffer) => {
+          try {
+            // Decode opus packet to PCM
+            const pcmChunk = decoder.decode(chunk)
+            chunks.push(pcmChunk)
+          } catch (error) {
+            consola.error("Failed to decode opus packet:", error)
+          }
+        })
+
+        opusStream.on("end", () => {
+          // Combine all chunks into a single buffer
+          const finalBuffer = Buffer.concat(chunks)
+
+          // Create output file path
+          const outputFile = join(
+            process.cwd(),
+            "recordings",
+            `${user?.tag ?? userId}.ogg`,
+          )
+
+          // Spawn ffmpeg process
+          const ffmpeg = spawn("ffmpeg", [
+            "-f",
+            PCM_FORMAT, // Input format: raw PCM
+            "-ar",
+            String(SAMPLE_RATE), // Sample rate: 48kHz
+            "-ac",
+            String(CHANNELS), // Audio channels: 2
+            "-i",
+            "-", // Input from stdin
+            "-c:a",
+            "libopus", // Encode to opus
+            outputFile, // Output file
+          ])
+
+          // Write the buffer to ffmpeg's stdin and close it
+          ffmpeg.stdin.write(finalBuffer)
+          ffmpeg.stdin.end()
+
+          ffmpeg.stderr.on("data", (data) => {
+            consola.debug(`ffmpeg: ${data}`)
+          })
+
+          ffmpeg.on("close", (code) => {
+            if (code === 0) {
+              consola.info(`Finished recording ${user?.tag ?? userId}`)
+            } else {
+              consola.error(`ffmpeg process exited with code ${code}`)
+            }
+          })
+
+          ffmpeg.on("error", (error) => {
+            consola.error(`Error recording ${user?.tag ?? userId}:`, error)
+          })
+        })
+
+        opusStream.on("error", (error) => {
+          consola.error(
+            `Error receiving audio from ${user?.tag ?? userId}:`,
+            error,
+          )
         })
       })
 
