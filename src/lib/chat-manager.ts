@@ -1,5 +1,11 @@
-import { GoogleGenerativeAI, ChatSession } from "@google/generative-ai"
+import {
+  GoogleGenerativeAI,
+  ChatSession,
+  HarmCategory,
+  HarmBlockThreshold,
+} from "@google/generative-ai"
 
+import { JAPANESE_SYSTEM_PROMPT } from "../prompts/japanese"
 import { ENV } from "./env"
 
 interface ChatManagerOptions {
@@ -25,7 +31,28 @@ export class ChatManager {
   }
 
   createSession(guildId: string): ChatSession {
-    const model = this.genAI.getGenerativeModel({ model: this.model })
+    const model = this.genAI.getGenerativeModel({
+      model: this.model,
+      systemInstruction: JAPANESE_SYSTEM_PROMPT,
+      safetySettings: [
+        {
+          category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+          threshold: HarmBlockThreshold.BLOCK_NONE,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+          threshold: HarmBlockThreshold.BLOCK_NONE,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+          threshold: HarmBlockThreshold.BLOCK_NONE,
+        },
+        {
+          category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+          threshold: HarmBlockThreshold.BLOCK_NONE,
+        },
+      ],
+    })
     const chat = model.startChat()
 
     this.chatSessions.set(guildId, chat)

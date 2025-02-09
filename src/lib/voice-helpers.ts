@@ -168,13 +168,22 @@ export async function handleSpeech(
       await googleFileManager.waitForFileProcessing(uploadedFile)
     consola.info(`Audio processing complete: ${processedFile.name}`)
 
-    const chat = chatManager.getSession(guildId)
+    let chat = chatManager.getSession(guildId)
     if (!chat) {
-      consola.error("No chat session found for guild")
-      return
+      consola.info(
+        `No chat session found for guild ${guildId}, creating new session`,
+      )
+      chatManager.createSession(guildId)
+      chat = chatManager.getSession(guildId)
+      if (!chat) {
+        consola.error("Failed to create chat session")
+        return
+      }
+      consola.success(`Created new chat session for guild ${guildId}`)
     }
 
     const response = await chat.sendMessage([
+      "User:",
       {
         fileData: {
           fileUri: processedFile.uri,
