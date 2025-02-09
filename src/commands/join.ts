@@ -160,6 +160,13 @@ const command: Command = {
                 return
               }
 
+              // Strip out the character names and clean up the text for TTS
+              const ryujiText = ryujiMatch.trim()
+              const annText = annMatch.trim()
+
+              consola.info("Ryuji Text:", ryujiText)
+              consola.info("Ann Text:", annText)
+
               // Create sequential TTS streams
               async function createCharacterAudioResource(
                 text: string,
@@ -198,7 +205,7 @@ const command: Command = {
               try {
                 // Play Ryuji first (Japanese)
                 const ryujiStream = await createCharacterAudioResource(
-                  ryujiMatch,
+                  ryujiText,
                   "ja-JP",
                   "ja-JP-KeitaNeural",
                 )
@@ -218,7 +225,7 @@ const command: Command = {
 
                 // Then play Ann (English)
                 const annStream = await createCharacterAudioResource(
-                  annMatch,
+                  annText,
                   "en-US",
                   "en-US-JennyNeural",
                 )
