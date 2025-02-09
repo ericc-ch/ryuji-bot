@@ -1,5 +1,8 @@
 import type { VoiceBasedChannel } from "discord.js"
 
+// Track processing state per guild
+const processingState = new Map<string, boolean>()
+
 import {
   VoiceReceiver,
   joinVoiceChannel,
@@ -112,7 +115,15 @@ export async function playCharacterResponses(
     inputType: StreamType.OggOpus,
   })
 
+  // Add promise to wait for Ann's audio to finish
+  const waitForAnn = new Promise<void>((resolve) => {
+    player.once(AudioPlayerStatus.Idle, () => {
+      resolve()
+    })
+  })
+
   player.play(annResource)
+  await waitForAnn
 }
 
 export async function handleSpeech(
@@ -125,6 +136,15 @@ export async function handleSpeech(
   tempManager: TempManager,
   googleFileManager: GoogleFileManager,
 ) {
+  // Check if we're already processing for this guild
+  if (processingState.get(guildId)) {
+    consola.info(
+      `${userTag ?? userId} tried to speak while processing another input`,
+    )
+    return
+  }
+
+  processingState.set(guildId, true)
   consola.info(`${userTag ?? userId} started speaking`)
 
   try {
@@ -183,5 +203,8 @@ export async function handleSpeech(
     await playCharacterResponses(player, ryujiText, annText)
   } catch (error) {
     consola.error("Failed to process speech:", error)
+  } finally {
+    // Make sure we always clear the processing state
+    processingState.set(guildId, false)
   }
 }
