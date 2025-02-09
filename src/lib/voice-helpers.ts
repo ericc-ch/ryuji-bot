@@ -1,0 +1,187 @@
+import type { VoiceBasedChannel } from "discord.js"
+
+import {
+  VoiceReceiver,
+  joinVoiceChannel,
+  createAudioResource,
+  StreamType,
+  createAudioPlayer,
+  AudioPlayerStatus,
+  AudioPlayer,
+} from "@discordjs/voice"
+import { synthesizeStream } from "@echristian/edge-tts"
+import { consola } from "consola"
+import { Readable } from "node:stream"
+
+import { processUserAudio } from "./audio-processor"
+import { ChatManager } from "./chat-manager"
+import { GoogleFileManager } from "./google-file-manager"
+import { TempManager } from "./temp-manager"
+
+export function setupVoiceConnection(voiceChannel: VoiceBasedChannel) {
+  const connection = joinVoiceChannel({
+    channelId: voiceChannel.id,
+    guildId: voiceChannel.guild.id,
+    adapterCreator: voiceChannel.guild.voiceAdapterCreator,
+    selfDeaf: false,
+  })
+
+  const player = createAudioPlayer()
+
+  player.on(AudioPlayerStatus.Playing, () => {
+    consola.info("Started playing audio response")
+  })
+
+  player.on(AudioPlayerStatus.Idle, () => {
+    consola.info("Finished playing audio response")
+  })
+
+  player.on("error", (error) => {
+    consola.error("Error:", error.message)
+  })
+
+  connection.subscribe(player)
+  return { connection, player }
+}
+
+export async function createCharacterAudioResource(
+  text: string,
+  language: string,
+  voice: string,
+) {
+  const audioChunks = synthesizeStream({
+    text,
+    language,
+    voice,
+  })
+
+  return new Promise<Readable>((resolve) => {
+    const audioStream = new Readable({
+      read() {
+        audioChunks.next().then(
+          (result) => {
+            if (result.done) {
+              this.push(null)
+            } else {
+              this.push(result.value)
+            }
+          },
+          (error: unknown) => {
+            consola.error("Error reading audio chunk:", error)
+            this.destroy(error as Error)
+          },
+        )
+      },
+    })
+    resolve(audioStream)
+  })
+}
+
+export async function playCharacterResponses(
+  player: AudioPlayer,
+  ryujiText: string,
+  annText: string,
+) {
+  // Play Ryuji first (Japanese)
+  const ryujiStream = await createCharacterAudioResource(
+    ryujiText,
+    "ja-JP",
+    "ja-JP-KeitaNeural",
+  )
+  const ryujiResource = createAudioResource(ryujiStream, {
+    inputType: StreamType.OggOpus,
+  })
+
+  // Set up promise to wait for Ryuji's audio to finish
+  const waitForRyuji = new Promise<void>((resolve) => {
+    player.once(AudioPlayerStatus.Idle, () => {
+      resolve()
+    })
+  })
+
+  player.play(ryujiResource)
+  await waitForRyuji
+
+  // Then play Ann (English)
+  const annStream = await createCharacterAudioResource(
+    annText,
+    "en-US",
+    "en-US-JennyNeural",
+  )
+  const annResource = createAudioResource(annStream, {
+    inputType: StreamType.OggOpus,
+  })
+
+  player.play(annResource)
+}
+
+export async function handleSpeech(
+  receiver: VoiceReceiver,
+  userId: string,
+  userTag: string | undefined,
+  guildId: string,
+  player: AudioPlayer,
+  chatManager: ChatManager,
+  tempManager: TempManager,
+  googleFileManager: GoogleFileManager,
+) {
+  consola.info(`${userTag ?? userId} started speaking`)
+
+  try {
+    const outputPath = await processUserAudio(receiver, {
+      userId,
+      userTag,
+      tempManager,
+      sampleRate: 48000,
+      channels: 2,
+      pcmFormat: "s16le",
+    })
+
+    consola.info(`Audio saved to temporary file: ${outputPath}`)
+
+    const uploadedFile = await googleFileManager.upload(outputPath, {
+      mimeType: "audio/ogg",
+    })
+    consola.info(`Audio uploaded to Google AI: ${uploadedFile.name}`)
+
+    const processedFile =
+      await googleFileManager.waitForFileProcessing(uploadedFile)
+    consola.info(`Audio processing complete: ${processedFile.name}`)
+
+    const chat = chatManager.getSession(guildId)
+    if (!chat) {
+      consola.error("No chat session found for guild")
+      return
+    }
+
+    const response = await chat.sendMessage([
+      {
+        fileData: {
+          fileUri: processedFile.uri,
+          mimeType: "audio/ogg",
+        },
+      },
+    ])
+
+    const responseText = response.response.text()
+    consola.info("AI Response:", responseText)
+
+    const ryujiMatch = /Ryuji: (.*)\n/.exec(responseText)?.[1]
+    const annMatch = /Ann: (.*)/.exec(responseText)?.[1]
+
+    if (!ryujiMatch || !annMatch) {
+      consola.error("Failed to parse character responses")
+      return
+    }
+
+    const ryujiText = ryujiMatch.trim()
+    const annText = annMatch.trim()
+
+    consola.info("Ryuji Text:", ryujiText)
+    consola.info("Ann Text:", annText)
+
+    await playCharacterResponses(player, ryujiText, annText)
+  } catch (error) {
+    consola.error("Failed to process speech:", error)
+  }
+}
