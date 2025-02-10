@@ -1,8 +1,5 @@
 import type { VoiceBasedChannel } from "discord.js"
 
-// Track processing state per guild
-const processingState = new Map<string, boolean>()
-
 import {
   VoiceReceiver,
   joinVoiceChannel,
@@ -12,14 +9,17 @@ import {
   AudioPlayerStatus,
   AudioPlayer,
 } from "@discordjs/voice"
-import { synthesizeStream } from "@echristian/edge-tts"
+import { synthesize } from "@echristian/edge-tts"
 import { consola } from "consola"
-import { Readable } from "node:stream"
+import stream from "node:stream"
 
 import { processUserAudio } from "./audio-processor"
 import { ChatManager } from "./chat-manager"
 import { GoogleFileManager } from "./google-file-manager"
 import { TempManager } from "./temp-manager"
+
+// Track processing state per guild
+const processingState = new Map<string, boolean>()
 
 export function setupVoiceConnection(voiceChannel: VoiceBasedChannel) {
   const connection = joinVoiceChannel({
@@ -52,32 +52,13 @@ export async function createCharacterAudioResource(
   language: string,
   voice: string,
 ) {
-  const audioChunks = synthesizeStream({
+  const { audio } = await synthesize({
     text,
     language,
     voice,
   })
 
-  return new Promise<Readable>((resolve) => {
-    const audioStream = new Readable({
-      read() {
-        audioChunks.next().then(
-          (result) => {
-            if (result.done) {
-              this.push(null)
-            } else {
-              this.push(result.value)
-            }
-          },
-          (error: unknown) => {
-            consola.error("Error reading audio chunk:", error)
-            this.destroy(error as Error)
-          },
-        )
-      },
-    })
-    resolve(audioStream)
-  })
+  return audio
 }
 
 export async function playCharacterResponses(
@@ -91,9 +72,12 @@ export async function playCharacterResponses(
     "ja-JP",
     "ja-JP-KeitaNeural",
   )
-  const ryujiResource = createAudioResource(ryujiStream, {
-    inputType: StreamType.OggOpus,
-  })
+  const ryujiResource = createAudioResource(
+    stream.Readable.from(Buffer.from(await ryujiStream.arrayBuffer())),
+    {
+      inputType: StreamType.OggOpus,
+    },
+  )
 
   // Set up promise to wait for Ryuji's audio to finish
   const waitForRyuji = new Promise<void>((resolve) => {
@@ -111,9 +95,13 @@ export async function playCharacterResponses(
     "en-US",
     "en-US-JennyNeural",
   )
-  const annResource = createAudioResource(annStream, {
-    inputType: StreamType.OggOpus,
-  })
+
+  const annResource = createAudioResource(
+    stream.Readable.from(Buffer.from(await annStream.arrayBuffer())),
+    {
+      inputType: StreamType.OggOpus,
+    },
+  )
 
   // Add promise to wait for Ann's audio to finish
   const waitForAnn = new Promise<void>((resolve) => {

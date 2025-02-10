@@ -131,3 +131,56 @@ export async function processUserAudio(
     })
   })
 }
+
+interface ConvertMp3Options {
+  inputPath: string
+  tempManager: TempManager
+}
+
+export async function convertMp3ToOgg(
+  options: ConvertMp3Options,
+): Promise<string> {
+  const { inputPath, tempManager } = options
+
+  consola.info(`Starting MP3 to OGG conversion for: ${inputPath}`)
+
+  // Create a temp directory for the output file
+  const tempDir = await tempManager.createTempDir()
+  const outputPath = join(tempDir, `${globalThis.crypto.randomUUID()}.ogg`)
+  consola.debug(`Created temporary directory: ${tempDir}`)
+  consola.debug(`Output file will be: ${outputPath}`)
+
+  return new Promise((resolve, reject) => {
+    // Spawn ffmpeg process
+    consola.debug(`Starting ffmpeg conversion`)
+    const ffmpeg = spawn("ffmpeg", [
+      "-i",
+      inputPath, // Input MP3 file
+      "-c:a",
+      "libopus", // Encode to opus
+      "-b:a",
+      "128k", // Bit rate
+      outputPath, // Output file
+    ])
+
+    ffmpeg.stderr.on("data", (data) => {
+      consola.debug(`ffmpeg: ${data}`)
+    })
+
+    ffmpeg.on("close", (code) => {
+      if (code === 0) {
+        consola.success(`Successfully converted MP3 to OGG: ${outputPath}`)
+        resolve(outputPath)
+      } else {
+        const error = new Error(`ffmpeg process exited with code ${code}`)
+        consola.error(error.message)
+        reject(error)
+      }
+    })
+
+    ffmpeg.on("error", (error) => {
+      consola.error(`ffmpeg error:`, error)
+      reject(error)
+    })
+  })
+}
