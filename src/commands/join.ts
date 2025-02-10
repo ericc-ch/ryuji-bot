@@ -30,7 +30,7 @@ const command: Command = {
       log.warn("Command used outside of a guild context")
       await interaction.reply({
         content: "This command can only be used in a server!",
-        ephemeral: true,
+        flags: [MessageFlags.Ephemeral],
       })
       return
     }
@@ -48,7 +48,7 @@ const command: Command = {
       )
       await interaction.reply({
         content: "You need to be in a voice channel first!",
-        ephemeral: true,
+        flags: [MessageFlags.Ephemeral],
       })
       return
     }
@@ -68,7 +68,7 @@ const command: Command = {
       )
       await interaction.reply({
         content: "I'm already in a voice channel in this server!",
-        ephemeral: true,
+        flags: [MessageFlags.Ephemeral],
       })
       return
     }
@@ -115,7 +115,7 @@ const command: Command = {
       log.info(`Successfully joined ${voiceChannel.name} and started listening`)
       await interaction.reply({
         content: `Joined ${voiceChannel.name} and started listening!`,
-        ephemeral: true,
+        flags: [MessageFlags.Ephemeral],
       })
     } catch (error) {
       log.error("Failed to set up voice connection:", error)
