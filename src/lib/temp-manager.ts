@@ -15,10 +15,10 @@ export class TempManager {
 
   constructor(prefix = "tmp-") {
     this.prefix = prefix
-    // Ensure cleanup on process exit
-    process.on("exit", () => this.cleanupAll())
-    process.on("SIGINT", () => this.cleanupAll())
-    process.on("SIGTERM", () => this.cleanupAll())
+    // // Ensure cleanup on process exit
+    // process.on("exit", () => this.cleanupAll())
+    // process.on("SIGINT", () => this.cleanupAll())
+    // process.on("SIGTERM", () => this.cleanupAll())
   }
 
   async createTempDir(): Promise<string> {

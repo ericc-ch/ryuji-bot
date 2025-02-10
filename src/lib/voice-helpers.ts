@@ -106,7 +106,7 @@ export async function playCharacterResponses(
   const annStream = await createCharacterAudioResource(
     annText,
     "en-US",
-    "en-US-JennyNeural",
+    "en-US-AvaMultilingualNeural",
   )
 
   // Create temp file for Ann's MP3
