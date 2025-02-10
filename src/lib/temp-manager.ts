@@ -3,7 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "pathe"
 
 interface TempFileOptions {
-  content: string
+  content: string | Buffer
   filename: string
   encoding?: BufferEncoding
 }

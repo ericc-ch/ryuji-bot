@@ -11,9 +11,8 @@ import {
 } from "@discordjs/voice"
 import { synthesize } from "@echristian/edge-tts"
 import { consola } from "consola"
-import stream from "node:stream"
 
-import { processUserAudio } from "./audio-processor"
+import { processUserAudio, convertMp3ToOgg } from "./audio-processor"
 import { ChatManager } from "./chat-manager"
 import { GoogleFileManager } from "./google-file-manager"
 import { TempManager } from "./temp-manager"
@@ -66,18 +65,32 @@ export async function playCharacterResponses(
   ryujiText: string,
   annText: string,
 ) {
+  const tempManager = new TempManager("voice-response-")
+
   // Play Ryuji first (Japanese)
   const ryujiStream = await createCharacterAudioResource(
     ryujiText,
     "ja-JP",
     "ja-JP-KeitaNeural",
   )
-  const ryujiResource = createAudioResource(
-    stream.Readable.from(Buffer.from(await ryujiStream.arrayBuffer())),
-    {
-      inputType: StreamType.OggOpus,
-    },
-  )
+
+  // Create temp files for the MP3 streams
+  const ryujiMp3File = await tempManager.createTempFile({
+    content: Buffer.from(await ryujiStream.arrayBuffer()),
+    filename: "ryuji.mp3",
+    encoding: "binary",
+  })
+
+  // Convert Ryuji's MP3 to OGG
+  const ryujiOggPath = await convertMp3ToOgg({
+    inputPath: ryujiMp3File,
+    tempManager,
+  })
+
+  // Create and play Ryuji's audio resource
+  const ryujiResource = createAudioResource(ryujiOggPath, {
+    inputType: StreamType.OggOpus,
+  })
 
   // Set up promise to wait for Ryuji's audio to finish
   const waitForRyuji = new Promise<void>((resolve) => {
@@ -96,12 +109,23 @@ export async function playCharacterResponses(
     "en-US-JennyNeural",
   )
 
-  const annResource = createAudioResource(
-    stream.Readable.from(Buffer.from(await annStream.arrayBuffer())),
-    {
-      inputType: StreamType.OggOpus,
-    },
-  )
+  // Create temp file for Ann's MP3
+  const annMp3File = await tempManager.createTempFile({
+    content: Buffer.from(await annStream.arrayBuffer()),
+    filename: "ann.mp3",
+    encoding: "binary",
+  })
+
+  // Convert Ann's MP3 to OGG
+  const annOggPath = await convertMp3ToOgg({
+    inputPath: annMp3File,
+    tempManager,
+  })
+
+  // Create and play Ann's audio resource
+  const annResource = createAudioResource(annOggPath, {
+    inputType: StreamType.OggOpus,
+  })
 
   // Add promise to wait for Ann's audio to finish
   const waitForAnn = new Promise<void>((resolve) => {
