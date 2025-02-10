@@ -67,73 +67,72 @@ export async function playCharacterResponses(
 ) {
   const tempManager = new TempManager("voice-response-")
 
-  // Play Ryuji first (Japanese)
-  const ryujiStream = await createCharacterAudioResource(
-    ryujiText,
-    "ja-JP",
-    "ja-JP-KeitaNeural",
-  )
+  // Start processing both characters in parallel
+  const ryujiPromise = (async () => {
+    const ryujiBlob = await createCharacterAudioResource(
+      ryujiText,
+      "ja-JP",
+      "ja-JP-KeitaNeural",
+    )
 
-  // Create temp files for the MP3 streams
-  const ryujiMp3File = await tempManager.createTempFile({
-    content: Buffer.from(await ryujiStream.arrayBuffer()),
-    filename: "ryuji.mp3",
-    encoding: "binary",
-  })
+    const ryujiMp3File = await tempManager.createTempFile({
+      content: Buffer.from(await ryujiBlob.arrayBuffer()),
+      filename: "ryuji.mp3",
+      encoding: "binary",
+    })
 
-  // Convert Ryuji's MP3 to OGG
-  const ryujiOggPath = await convertMp3ToOgg({
-    inputPath: ryujiMp3File,
-    tempManager,
-  })
+    return await convertMp3ToOgg({
+      inputPath: ryujiMp3File,
+      tempManager,
+    })
+  })()
 
-  // Create and play Ryuji's audio resource
+  const annPromise = (async () => {
+    const annBlob = await createCharacterAudioResource(
+      annText,
+      "en-US",
+      "en-US-AvaMultilingualNeural",
+    )
+
+    const annMp3File = await tempManager.createTempFile({
+      content: Buffer.from(await annBlob.arrayBuffer()),
+      filename: "ann.mp3",
+      encoding: "binary",
+    })
+
+    return await convertMp3ToOgg({
+      inputPath: annMp3File,
+      tempManager,
+    })
+  })()
+
+  // Start processing Ann's audio in the background while we play Ryuji's
+  const ryujiOggPath = await ryujiPromise
+
+  // Create and play Ryuji's audio
   const ryujiResource = createAudioResource(ryujiOggPath, {
     inputType: StreamType.OggOpus,
   })
-
-  // Set up promise to wait for Ryuji's audio to finish
   const waitForRyuji = new Promise<void>((resolve) => {
     player.once(AudioPlayerStatus.Idle, () => {
       resolve()
     })
   })
-
   player.play(ryujiResource)
   await waitForRyuji
 
-  // Then play Ann (English)
-  const annStream = await createCharacterAudioResource(
-    annText,
-    "en-US",
-    "en-US-AvaMultilingualNeural",
-  )
+  // By now Ann's audio might already be ready, if not we'll wait for it
+  const annOggPath = await annPromise
 
-  // Create temp file for Ann's MP3
-  const annMp3File = await tempManager.createTempFile({
-    content: Buffer.from(await annStream.arrayBuffer()),
-    filename: "ann.mp3",
-    encoding: "binary",
-  })
-
-  // Convert Ann's MP3 to OGG
-  const annOggPath = await convertMp3ToOgg({
-    inputPath: annMp3File,
-    tempManager,
-  })
-
-  // Create and play Ann's audio resource
+  // Create and play Ann's audio
   const annResource = createAudioResource(annOggPath, {
     inputType: StreamType.OggOpus,
   })
-
-  // Add promise to wait for Ann's audio to finish
   const waitForAnn = new Promise<void>((resolve) => {
     player.once(AudioPlayerStatus.Idle, () => {
       resolve()
     })
   })
-
   player.play(annResource)
   await waitForAnn
 }

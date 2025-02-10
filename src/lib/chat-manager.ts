@@ -20,7 +20,7 @@ export class ChatManager {
 
   private constructor(options: ChatManagerOptions = {}) {
     this.genAI = new GoogleGenerativeAI(ENV.GEMINI_API_KEY)
-    this.model = options.model ?? "gemini-2.0-flash"
+    this.model = options.model ?? "gemini-2.0-flash-lite-preview-02-05"
   }
 
   static getInstance(options: ChatManagerOptions = {}): ChatManager {
